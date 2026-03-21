@@ -1522,7 +1522,21 @@ SimpleUIPlugin.addToMainMenu = function(self, menu_items)
                                         text         = _("Folder Covers"),
                                         checked_func = function() return FC.isEnabled() end,
                                         separator    = true,
-                                        callback     = function() FC.setEnabled(not FC.isEnabled()); _refreshFC() end,
+                                        callback     = function()
+                                            local enabling = not FC.isEnabled()
+                                            FC.setEnabled(enabling)
+                                            -- Install or uninstall the MosaicMenuItem patch
+                                            -- at toggle time so that third-party user-patches
+                                            -- (e.g. 2-browser-folder-cover.lua) that rely on
+                                            -- userpatch.getUpValue(MosaicMenuItem.update, …)
+                                            -- find the original function when FC is off.
+                                            if enabling then
+                                                pcall(FC.install)
+                                            else
+                                                pcall(FC.uninstall)
+                                            end
+                                            _refreshFC()
+                                        end,
                                     },
                                     {
                                         text         = _("Label"),
