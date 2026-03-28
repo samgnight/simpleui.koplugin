@@ -942,6 +942,9 @@ local function _executeInPlace(action_id, plugin, fm)
 
     if action_id == "wifi_toggle" then
         M.doWifiToggle(plugin)
+        -- Rebuild homescreen content so the Quick Actions wifi icon updates
+        -- immediately (doWifiToggle only rebuilds the navbar bars).
+        if HS and HS.refreshImmediate then HS.refreshImmediate(true) end
 
     elseif action_id == "frontlight" then
         M.showFrontlightDialog()
@@ -1234,14 +1237,8 @@ function M.doWifiToggle(plugin)
     end
 
     -- Immediately refresh the bar and topbar with the optimistic Wi-Fi state.
-    -- Both rebuilds are deferred via scheduleIn(0) so they run in UIManager's
-    -- own processing loop, which is required to trigger a visible e-ink update.
     if plugin then
-        UIManager:scheduleIn(0, function()
-            if not plugin._simpleui_suspended then
-                plugin:_rebuildAllNavbars()
-            end
-        end)
+        plugin:_rebuildAllNavbars()
         local Topbar = require("sui_topbar")
         local cfg    = Config.getTopbarConfig()
         if (cfg.side["wifi"] or "hidden") ~= "hidden" then
