@@ -149,7 +149,7 @@ for _i, a in ipairs(M.ALL_ACTIONS) do M.ACTION_BY_ID[a.id] = a end
 -- Topbar configuration
 -- ---------------------------------------------------------------------------
 
-M.TOPBAR_ITEMS = { "clock", "wifi", "brightness", "battery", "disk", "ram" }
+M.TOPBAR_ITEMS = { "clock", "date", "wifi", "brightness", "battery", "disk", "ram" }
 
 local _topbar_item_labels = nil
 
@@ -157,6 +157,7 @@ function M.TOPBAR_ITEM_LABEL(k)
     if not _topbar_item_labels then
         _topbar_item_labels = {
             clock      = _("Clock"),
+            date       = _("Date"),
             wifi       = _("WiFi"),
             brightness = _("Brightness"),
             battery    = _("Battery"),

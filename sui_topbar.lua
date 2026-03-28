@@ -175,6 +175,7 @@ end
 
 function M.getTopbarInfo()
     local info = { time = datetime.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock")) }
+    info.date = os.date("%a, %b %d"):gsub(" 0", " ")
 
     if hwHasBattery() then
         -- getPowerDevice() and its methods are stable KOReader APIs; wrap the
@@ -311,6 +312,9 @@ function M.buildTopbarWidget()
     local item_builders = {
         clock = function()
             return nil, info.time, false
+        end,
+        date = function()
+            return nil, info.date, false
         end,
         wifi = function()
             if info.wifi then
