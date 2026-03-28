@@ -1234,8 +1234,14 @@ function M.doWifiToggle(plugin)
     end
 
     -- Immediately refresh the bar and topbar with the optimistic Wi-Fi state.
+    -- Both rebuilds are deferred via scheduleIn(0) so they run in UIManager's
+    -- own processing loop, which is required to trigger a visible e-ink update.
     if plugin then
-        plugin:_rebuildAllNavbars()
+        UIManager:scheduleIn(0, function()
+            if not plugin._simpleui_suspended then
+                plugin:_rebuildAllNavbars()
+            end
+        end)
         local Topbar = require("sui_topbar")
         local cfg    = Config.getTopbarConfig()
         if (cfg.side["wifi"] or "hidden") ~= "hidden" then
