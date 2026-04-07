@@ -1408,19 +1408,48 @@ function M.patchMenuForNavpager(plugin)
     -- and from the FM updateTitleBarPath hook below.
     -- Only runs when the navpager is enabled; no-ops otherwise.
     -- ---------------------------------------------------------------------------
+    -- Single source of truth for the FM title-bar subtitle.
+    -- _fm_path_base: the raw path string last written by updateTitleBarPath
+    -- (empty string at home).  Always set before calling _setPageSubtitle.
+    local _fm_path_base = ""
+
+    -- _setSubtitleUnified: the ONE place that calls tb:setSubTitle in the FM.
+    -- Combines path (if any) with page indicator (if enabled and multi-page).
+    local function _setSubtitleUnified(tb, path_base, page, page_num)
+        if not tb or not tb.subtitle_widget then return end
+        local parts = {}
+        if path_base and path_base ~= "" then
+            parts[#parts + 1] = path_base
+        end
+        if _subtitleEnabled() and page_num and page_num > 1 then
+            local T = require("ffi/util").template
+            parts[#parts + 1] = T(_("Page %1 of %2"), page, page_num)
+        end
+        tb:setSubTitle(table.concat(parts, "  ·  "), true)
+    end
+
     local function _setPageSubtitle(tb, page, page_num)
         if not tb or not tb.subtitle_widget then return end
-        if not _subtitleEnabled() then return end
-        local T = require("ffi/util").template
-        if page_num > 1 then
-            tb:setSubTitle(T(_("Page %1 of %2"), page, page_num), true)
-        else
-            -- Single page or unknown — clear our addition, restore empty subtitle.
-            tb:setSubTitle("", true)
-        end
+        _setSubtitleUnified(tb, _fm_path_base, page, page_num)
     end
     -- Expose so the FM hook (defined below) can reuse it.
     M._setPageSubtitle = _setPageSubtitle
+
+    -- Setter so other modules (e.g. sui_foldercovers) can update the path
+    -- base when entering a virtual folder that never calls updateTitleBarPath.
+    function M.setFMPathBase(text, fm_self)
+        _fm_path_base = text or ""
+        -- Immediately repaint the unified subtitle if we have a FM reference.
+        if fm_self then
+            local tb3 = fm_self.title_bar
+            local fc2 = fm_self.file_chooser
+            if tb3 and tb3.subtitle_widget then
+                local pg     = fc2 and (fc2.page     or 0) or 0
+                local pg_num = fc2 and (fc2.page_num or 0) or 0
+                _setSubtitleUnified(tb3, _fm_path_base, pg, pg_num)
+            end
+        end
+    end
 
     Menu.updatePageInfo = function(menu_self, select_number)
         orig_updatePageInfo(menu_self, select_number)
@@ -1561,31 +1590,26 @@ function M.patchMenuForNavpager(plugin)
             UIManager:setDirty(tb.show_parent or fm_self, "ui", tb.dimen)
         end
 
+        -- Determine the path text for the subtitle.
+        -- At home we want an empty base; in a subfolder we call the original
+        -- (which writes the path into the subtitle) then immediately read it
+        -- back so _setSubtitleUnified can combine path + page in one write.
         if at_home then
-            -- At home: clear the path text (title "Library" is enough).
-            if tb and tb.subtitle_widget then tb:setSubTitle("") end
+            _fm_path_base = ""
         else
-            -- In a subfolder: let the original write the path.
+            -- Let the original write the path first so we can read it back.
             orig_updateTitleBarPath(fm_self, path)
+            local tb2 = fm_self.title_bar
+            _fm_path_base = (tb2 and tb2.subtitle_widget and tb2.subtitle_widget.text) or ""
         end
 
-        -- Append page pagination if enabled.
-        if not _subtitleEnabled() then return end
-        local fc = fm_self.file_chooser
-        if not fc then return end
-        tb = fm_self.title_bar
-        if not tb or not tb.subtitle_widget then return end
-        local page     = fc.page     or 0
-        local page_num = fc.page_num or 0
-        if page_num > 1 then
-            local T        = require("ffi/util").template
-            local base     = tb.subtitle_widget.text or ""
-            local page_str = T(_("Page %1 of %2"), page, page_num)
-            if base ~= "" then
-                tb:setSubTitle(base .. "  ·  " .. page_str)
-            else
-                tb:setSubTitle(page_str)
-            end
+        -- Now write the unified subtitle (path + page if enabled).
+        local fc2 = fm_self.file_chooser
+        local tb3 = fm_self.title_bar
+        if tb3 and tb3.subtitle_widget then
+            local pg     = fc2 and (fc2.page     or 0) or 0
+            local pg_num = fc2 and (fc2.page_num or 0) or 0
+            _setSubtitleUnified(tb3, _fm_path_base, pg, pg_num)
         end
     end
 end

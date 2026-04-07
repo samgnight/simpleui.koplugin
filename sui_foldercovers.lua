@@ -942,6 +942,15 @@ local function _sgOpenGroup(file_chooser, group_item)
 
     file_chooser:switchItemTable(nil, items, nil, nil, group_item.text)
 
+    -- Notify the subtitle system about the virtual folder name so the
+    -- title-bar subtitle shows the series name (and optionally page X of Y)
+    -- even though no real updateTitleBarPath is fired for virtual folders.
+    local ok_p, Patches = pcall(require, "sui_patches")
+    if ok_p and Patches and Patches.setFMPathBase then
+        local fm = require("apps/filemanager/filemanager").instance
+        Patches.setFMPathBase(group_item.text, fm)
+    end
+
     -- After switching to the virtual item table, force the titlebar to
     -- re-evaluate the up-button state for page 1. The genItemTable hook
     -- is not called for virtual folders (no real FS scan), so we trigger
