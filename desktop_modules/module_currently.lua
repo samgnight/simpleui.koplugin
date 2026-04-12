@@ -5,7 +5,6 @@
 local Device  = require("device")
 local Screen  = Device.screen
 local _       = require("gettext")
-local N_      = _.ngettext
 local logger  = require("logger")
 
 local Blitbuffer      = require("ffi/blitbuffer")
@@ -19,6 +18,7 @@ local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan  = require("ui/widget/horizontalspan")
 local InputContainer  = require("ui/widget/container/inputcontainer")
 local LineWidget      = require("ui/widget/linewidget")
+local Widget          = require("ui/widget/widget")
 local OverlapGroup    = require("ui/widget/overlapgroup")
 local TextWidget      = require("ui/widget/textwidget")
 local TextBoxWidget   = require("ui/widget/textboxwidget")
@@ -103,6 +103,17 @@ local _MAX_SEC = 120
 local _bstats_cache = {}
 
 
+local RoundedBar = Widget:extend{}
+function RoundedBar:getSize() return Geom:new{ w = self.width, h = self.height } end
+function RoundedBar:paintTo(bb, x, y)
+    local r = math.min(self.radius, math.floor(self.height / 2))
+    bb:paintRoundedRect(x, y, self.width, self.height, self.bg_color, r)
+    local fw = math.max(0, math.floor(self.width * math.min(self.pct, 1.0)))
+    if fw > 0 then
+        bb:paintRoundedRect(x, y, fw, self.height, self.fill_color, r)
+    end
+end
+
 -- Builds a progress bar with an inline percentage label: [▓▓▓░░░░] XX%
 -- Spacing below the bar is handled by gap_before() on the next element,
 -- consistent with how every other element in the layout works.
@@ -115,16 +126,14 @@ local function buildProgressBarWithPct(w, pct, bar_h, scale, lbl_scale, face_inl
     -- face_inline is pre-resolved by build(); fallback for direct calls.
     local _face   = face_inline or Font:getFace("smallinfofont", math.max(7, math.floor(_BASE_INLINEPCT_FS * scale * lbl_scale)))
 
-    local bar
-    if fw <= 0 then
-        bar = LineWidget:new{ dimen = Geom:new{ w = bar_w, h = bar_h }, background = _CLR_BAR_BG }
-    else
-        bar = OverlapGroup:new{
-            dimen = Geom:new{ w = bar_w, h = bar_h },
-            LineWidget:new{ dimen = Geom:new{ w = bar_w, h = bar_h }, background = _CLR_BAR_BG },
-            LineWidget:new{ dimen = Geom:new{ w = fw,    h = bar_h }, background = _CLR_BAR_FG },
-        }
-    end
+    local bar = RoundedBar:new{
+        width      = bar_w,
+        height     = bar_h,
+        pct        = pct,
+        radius     = Screen:scaleBySize(3),
+        bg_color   = _CLR_BAR_BG,
+        fill_color = _CLR_BAR_FG,
+    }
 
     return HorizontalGroup:new{
         align = "center",
@@ -340,8 +349,7 @@ local function _computeContentH(params)
     local elems = {}
 
     if show.title then
-        -- TextBoxWidget with max_lines=2: reserve up to 2 lines.
-        elems[#elems+1] = { title_gap, title_line_h * 2 }
+        elems[#elems+1] = { title_gap, title_line_h }
     end
     if show.author and bd.authors and bd.authors ~= "" then
         elems[#elems+1] = { author_gap, author_line_h }
@@ -492,12 +500,13 @@ function M.build(w, ctx)
     for _i, elem in ipairs(elem_order) do
         if elem == "title" and show.title then
             gap_before(title_gap)
-            meta[#meta+1] = TextBoxWidget:new{
-                text      = truncateTitle(bd.title) or "?",
-                face      = face_title,
-                bold      = true,
-                width     = tw,
-                max_lines = 2,
+            meta[#meta+1] = TextWidget:new{
+                text            = bd.title or "?",
+                face            = face_title,
+                bold            = true,
+                width           = tw,
+                max_width       = tw,
+                truncation_char = "â¦",  -- "…" UTF-8
             }
             meta_has_content = true
 
@@ -537,7 +546,9 @@ function M.build(w, ctx)
         elseif elem == "book_days" and show.days and bstats and bstats.days > 0
                and stats_style == "default" then
             gap_before(pct_gap)
-            local days_label = string.format(N_("%d day of reading", "%d days of reading", bstats.days), bstats.days)
+            local days_label = bstats.days == 1
+                and _("1 day of reading")
+                or  string.format(_("%d days of reading"), bstats.days)
             meta[#meta+1] = TextWidget:new{
                 text    = days_label,
                 face    = face_s,
@@ -604,7 +615,9 @@ function M.build(w, ctx)
                     elseif e == "book_remaining" and show.remain and secs_left then
                         parts[#parts+1] = string.format(_("%s left"), fmtTime(secs_left))
                     elseif e == "book_days" and show.days and bstats and bstats.days > 0 then
-                        parts[#parts+1] = string.format(N_("%d day of reading", "%d days of reading", bstats.days), bstats.days)
+                        parts[#parts+1] = bstats.days == 1
+                            and _("1 day of reading")
+                            or  string.format(_("%d days of reading"), bstats.days)
                     end
                 end
 
